@@ -16,7 +16,7 @@ AudioConnection          patchCord4(waveshape2, 0, i2s2, 1);
 AudioControlSGTL5000     sgtl5000_1;     //xy=252,111
 // GUItool: end automatically generated code
 
-#define MAX_ORDER 3
+#define MAX_ORDER 2
 float alpha[MAX_ORDER-1] = {0.05}; // First entry is second-order
 float waveshape[32769];
 
