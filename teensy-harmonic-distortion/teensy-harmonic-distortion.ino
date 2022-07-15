@@ -18,33 +18,48 @@ AudioControlSGTL5000     sgtl5000_1;     //xy=252,111
 
 #define MAX_ORDER 2
 float alpha[MAX_ORDER-1] = {0.05}; // First entry is second-order
-float waveshape[32769];
+float waveshape[32769] = {0};
 
 void setup() {
   // put your setup code here, to run once:
+  float *x = (float*)malloc(sizeof(float)*32769),
+        *cheby_poly_lut_0 = (float*)malloc(sizeof(float)*32769),
+        *cheby_poly_lut_1 = (float*)malloc(sizeof(float)*32769);
+  
   for(int i = 0; i < 32769; i++){
-    float y = 2*(i/32768.)-1;
-    float x = asin(y), y_mod = sin(x), divisor = 1;
-    for(int i = 0; i < MAX_ORDER-1; i++){
-      int n = i+2;
-      float theta = (n+1)*HALF_PI;
-      y_mod += alpha[i]*sin(n*x+theta);
-      if(!(n % 2)){
-        y_mod += alpha[i];
-        divisor += 2*alpha[i];
-      }
-      else divisor -= alpha[i];
-    }
-    waveshape[i] = y_mod / divisor;
+    x[i] = 2.0*(i/32768.0)-1.0; // map from index to value
+    cheby_poly_lut_0[i] = 1.0; // 0th chebyshev, DC
+    cheby_poly_lut_1[i] = x[i]; // 1st chebyshev, pass-through
+
+    waveshape[i] = cheby_poly_lut_1[i]; // init with the 1st chebyshev polynomial
   }
 
-  bool error = false;
-  for(int i = 0; i < 32769; i++)
-    if(abs(waveshape[i]) > 1) error = true;
-  if(error){
-    Serial.print("Harmonics too large! Stopping...");
-    while(1);
+  for(int k = 2; k <= MAX_ORDER; k++){ // k is the cheby_order
+    for(int i = 0; i < 32769; i++){
+      // generate the next chebyshev polynomial then add it to waveshape
+      float next_cheby_poly = 2.0*x[i]*cheby_poly_lut_1[i]-cheby_poly_lut_0[i];
+      waveshape[i] += alpha[k-2]*next_cheby_poly;
+
+      cheby_poly_lut_0[i] = cheby_poly_lut_1[i];
+      cheby_poly_lut_1[i] = next_cheby_poly;
+    }
   }
+
+  // remove the offset at zero
+  float zero_offset = waveshape[16384];
+  for(int i = 0; i < 32769; i++) waveshape[i] -= zero_offset;
+
+  // normalize the waveshaper to -1dB Vpk
+  float max_abs_val = 0;
+  for(int i = 0; i < 32769; i++){
+    float abs_val = abs(waveshape[i]);
+    if(abs_val > max_abs_val) max_abs_val = abs_val;
+  }
+  for(int i = 0; i < 32769; i++) waveshape[i] *= pow(10.0, -1.0/20.0)/max_abs_val;
+
+  free(x);
+  free(cheby_poly_lut_0);
+  free(cheby_poly_lut_1);
   
   AudioMemory(12);
   waveshape1.shape(waveshape, 32769);
